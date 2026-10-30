@@ -185,14 +185,15 @@
 <div id="auth" class="auth-wrap hidden">
   <form id="login-form" class="auth-card">
     <div class="brand" style="margin-bottom:18px"><span class="brand-dot"></span>Stock tracker</div>
-    <h1>Sign in</h1>
-    <p class="sub" style="margin:0">Use your team username and password.</p>
+    <h1>Admin sign in</h1>
+    <p class="sub" style="margin:0">Anyone can view stock. Sign in to save changes.</p>
     <label for="username">Username</label>
     <input id="username" autocomplete="username" autocapitalize="none" required>
     <label for="password">Password</label>
     <input id="password" type="password" autocomplete="current-password" required>
     <button class="btn btn-primary" type="submit">Sign in</button>
     <div id="login-error" class="error" role="alert"></div>
+    <button class="btn btn-ghost" type="button" id="back-to-stock" style="margin-top:4px">Back to stock</button>
   </form>
   <form id="pw-form" class="auth-card hidden">
     <h1>Set a new password</h1>
@@ -213,6 +214,7 @@
         <span class="name" id="who-name"></span>
         <span class="role" id="who-role"></span>
         <button class="btn btn-ghost" id="sign-out">Sign out</button>
+        <button class="btn" id="sign-in">Sign in</button>
       </div>
     </div>
   </header>
@@ -221,7 +223,7 @@
     <p class="sub" id="last-count"></p>
 
     <div class="stats" id="stats"></div>
-    <div id="readonly-note" class="notice hidden">You can view stock, but only admins can save changes.</div>
+    <div id="readonly-note" class="notice hidden"></div>
 
     <div class="tabs" role="tablist" id="tabs"></div>
 
@@ -302,9 +304,10 @@ function toast(msg, isErr = false) {
 
 /* ---------- Auth ---------- */
 
+// Stock is public to view; signing in only unlocks saving for admins.
 async function boot() {
   const { data: { session } } = await db.auth.getSession();
-  if (session) await enter(session); else showLogin();
+  if (session) await enter(session); else await enterPublic();
 }
 
 function showLogin() {
@@ -312,13 +315,33 @@ function showLogin() {
   $('auth').classList.remove('hidden');
   $('login-form').classList.remove('hidden');
   $('pw-form').classList.add('hidden');
+  $('login-error').textContent = '';
+  $('username').focus();
+}
+
+function showApp({ name = '', role, note, signedIn }) {
+  $('who-name').textContent = name;
+  $('who-role').textContent = role;
+  $('readonly-note').textContent = note || '';
+  $('readonly-note').classList.toggle('hidden', !note);
+  $('sign-in').classList.toggle('hidden', signedIn);
+  $('sign-out').classList.toggle('hidden', !signedIn);
+  $('auth').classList.add('hidden');
+  $('app').classList.remove('hidden');
+}
+
+async function enterPublic() {
+  state.isAdmin = false;
+  showApp({ role: 'View only', note: 'Viewing only. Admins can sign in to save changes.', signedIn: false });
+  await load();
 }
 
 async function enter(session) {
   const { data: profile, error } = await db.from('profiles')
     .select('username, is_admin, must_change_password').eq('id', session.user.id).maybeSingle();
-  if (error) { toast(error.message, true); return showLogin(); }
+  if (error) { toast(error.message, true); await db.auth.signOut(); return enterPublic(); }
   if (profile?.must_change_password) {
+    $('app').classList.add('hidden');
     $('auth').classList.remove('hidden');
     $('login-form').classList.add('hidden');
     $('pw-form').classList.remove('hidden');
@@ -326,11 +349,12 @@ async function enter(session) {
     return;
   }
   state.isAdmin = !!profile?.is_admin;
-  $('who-name').textContent = profile?.username || session.user.email;
-  $('who-role').textContent = state.isAdmin ? 'Admin' : 'View only';
-  $('readonly-note').classList.toggle('hidden', state.isAdmin);
-  $('auth').classList.add('hidden');
-  $('app').classList.remove('hidden');
+  showApp({
+    name: profile?.username || session.user.email,
+    role: state.isAdmin ? 'Admin' : 'View only',
+    note: state.isAdmin ? '' : 'You can view stock, but only admins can save changes.',
+    signedIn: true,
+  });
   await load();
 }
 
@@ -361,7 +385,13 @@ $('sign-out').addEventListener('click', async () => {
       !confirm('You have unsaved changes. Sign out anyway?')) return;
   await db.auth.signOut();
   state.drafts = {};
-  showLogin();
+  await enterPublic();
+});
+
+$('sign-in').addEventListener('click', showLogin);
+$('back-to-stock').addEventListener('click', () => {
+  $('auth').classList.add('hidden');
+  $('app').classList.remove('hidden');
 });
 
 /* ---------- Data ---------- */

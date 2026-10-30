@@ -16,8 +16,8 @@ No environment variables are needed: the Supabase URL and **publishable** key ar
 
 ## Access
 
-- Sign in with your team username and password (the same accounts as the meeting tracker).
-- Any signed-in user can view stock; only users with `profiles.is_admin = true` can save changes.
+- Anyone with the link can view stock, Low items and the supplier order list — no sign-in needed.
+- To save changes, use **Sign in** (top right) with your team username and password (the same accounts as the meeting tracker). Only users with `profiles.is_admin = true` can save; this is enforced by row-level security in Supabase, not just the UI.
 
 ## How saving works
 
