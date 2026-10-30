@@ -1,0 +1,11 @@
+# Stock data exports stay local (the repo is public)
+raw/
+prepared/
+
+# Local tooling
+.vercel/
+.claude/
+.env*
+node_modules/
+.DS_Store
+Thumbs.db

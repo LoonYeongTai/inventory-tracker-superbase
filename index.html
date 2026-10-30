@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Café Stock Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --border: #e3e6eb;
+    --border-strong: #cfd4dc;
+    --text: #1d2433;
+    --muted: #5b6475;
+    --faint: #8a93a3;
+    --accent: #d9631e;
+    --accent-soft: #fdf1e8;
+    --accent-ink: #a84a12;
+    --ok: #3d7a5c;
+    --danger: #b3402f;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(29, 36, 51, .05), 0 1px 1px rgba(29, 36, 51, .03);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hidden { display: none !important; }
+
+  /* Top bar */
+  .topbar { background: var(--card); border-bottom: 1px solid var(--border); }
+  .topbar-inner {
+    max-width: 1200px; margin: 0 auto; padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .brand-dot { width: 12px; height: 12px; border-radius: 4px; background: var(--accent); }
+  .who { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 15px; }
+  .role { font-size: 13px; padding: 2px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 28px 24px 64px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+
+  /* Buttons */
+  .btn {
+    border: 1px solid var(--border-strong); background: var(--card); border-radius: 8px;
+    padding: 8px 14px; font-weight: 500; font-size: 15px; box-shadow: var(--shadow);
+  }
+  .btn:hover:not(:disabled) { border-color: var(--faint); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-ink); border-color: var(--accent-ink); }
+  .btn:disabled { opacity: .45; box-shadow: none; }
+  .btn-ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--muted); }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: var(--shadow); text-align: left; width: 100%;
+  }
+  button.stat:hover { border-color: var(--border-strong); }
+  .stat-label { color: var(--muted); font-size: 15px; font-weight: 500; }
+  .stat-value { font-size: 34px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; margin-top: 4px; }
+  .stat-note { color: var(--faint); font-size: 14px; }
+  .stat-value.has-low { color: var(--accent); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; overflow-x: auto; overflow-y: hidden; }
+  .tab {
+    border: 0; background: none; padding: 12px 16px; font-weight: 600; font-size: 17px;
+    color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  .count { font-size: 13px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+  .count.low { background: var(--accent-soft); color: var(--accent-ink); border-color: #f5d3bc; }
+
+  /* Toolbar */
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--card); border-radius: 999px;
+    padding: 6px 14px; font-size: 15px; font-weight: 500; color: var(--muted);
+  }
+  .chip:hover { border-color: var(--border-strong); color: var(--text); }
+  .chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: #fff; }
+  .toolbar-right { display: flex; align-items: center; gap: 10px; }
+  .toggle { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 15px; cursor: pointer; }
+  .toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+  /* Item cards */
+  .cat-title { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); margin: 26px 0 12px; }
+  .cat-title:first-child { margin-top: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px;
+  }
+  .card.is-low { border-left: 3px solid var(--accent); padding-left: 18px; }
+  .card.is-dirty { border-color: var(--border-strong); }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .item-name { font-size: 18px; font-weight: 600; line-height: 1.3; }
+  .item-meta { color: var(--faint); font-size: 14px; margin-top: 2px; }
+  .badge { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .badge-low { background: var(--accent-soft); color: var(--accent-ink); }
+  .badge-ok { background: #edf5f0; color: var(--ok); }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field-label { font-size: 14px; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+  .stepper { display: flex; align-items: stretch; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; height: 44px; }
+  .stepper button { width: 40px; border: 0; background: var(--bg); font-size: 20px; color: var(--muted); flex: none; }
+  .stepper button:hover:not(:disabled) { background: #eceef2; color: var(--text); }
+  .stepper input {
+    width: 100%; min-width: 0; border: 0; text-align: center; font-size: 20px; font-weight: 600;
+    border-left: 1px solid var(--border); border-right: 1px solid var(--border); -moz-appearance: textfield;
+  }
+  .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .stepper input:disabled { background: var(--card); color: var(--text); }
+  .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 38px; }
+  .foot-note { color: var(--faint); font-size: 14px; }
+  .foot-actions { display: flex; gap: 6px; }
+
+  /* Order list */
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .panel-title { font-size: 20px; font-weight: 700; }
+  .panel-sub { color: var(--muted); font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 14px 20px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 14px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  .total { font-size: 20px; font-weight: 700; color: var(--accent-ink); }
+  .split { color: var(--muted); font-size: 15px; }
+  .show-sm { display: none; }
+  .empty { padding: 48px 20px; text-align: center; color: var(--muted); }
+
+  /* Notices, login, toast */
+  .notice { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--faint); border-radius: 8px; padding: 12px 16px; color: var(--muted); margin-bottom: 20px; font-size: 15px; }
+  .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+  .auth-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px 28px; box-shadow: 0 8px 24px rgba(29, 36, 51, .06); }
+  .auth-card h1 { font-size: 24px; }
+  .auth-card label { display: block; font-size: 15px; font-weight: 500; color: var(--muted); margin: 16px 0 6px; }
+  .auth-card input { width: 100%; height: 46px; border: 1px solid var(--border-strong); border-radius: 8px; padding: 0 12px; font-size: 17px; }
+  .auth-card .btn { width: 100%; height: 46px; margin-top: 22px; font-size: 17px; }
+  .error { color: var(--danger); font-size: 15px; margin-top: 12px; min-height: 1.5em; }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 15px;
+    opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { background: var(--danger); }
+
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .topbar-inner, main { padding-left: 16px; padding-right: 16px; }
+    main { padding-top: 20px; }
+    h1 { font-size: 25px; }
+    .grid { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-value { font-size: 28px; }
+    .who .name { display: none; }
+    th, td { padding: 12px 14px; }
+    .hide-sm { display: none; }
+    .show-sm { display: block; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Sign in -->
+<div id="auth" class="auth-wrap hidden">
+  <form id="login-form" class="auth-card">
+    <div class="brand" style="margin-bottom:18px"><span class="brand-dot"></span>Stock tracker</div>
+    <h1>Sign in</h1>
+    <p class="sub" style="margin:0">Use your team username and password.</p>
+    <label for="username">Username</label>
+    <input id="username" autocomplete="username" autocapitalize="none" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button class="btn btn-primary" type="submit">Sign in</button>
+    <div id="login-error" class="error" role="alert"></div>
+  </form>
+  <form id="pw-form" class="auth-card hidden">
+    <h1>Set a new password</h1>
+    <p class="sub" style="margin:0">Your account needs a new password before you continue.</p>
+    <label for="new-pw">New password (8+ characters)</label>
+    <input id="new-pw" type="password" autocomplete="new-password" minlength="8" required>
+    <button class="btn btn-primary" type="submit">Save password</button>
+    <div id="pw-error" class="error" role="alert"></div>
+  </form>
+</div>
+
+<!-- App -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-dot"></span>Stock tracker</div>
+      <div class="who">
+        <span class="name" id="who-name"></span>
+        <span class="role" id="who-role"></span>
+        <button class="btn btn-ghost" id="sign-out">Sign out</button>
+      </div>
+    </div>
+  </header>
+  <main>
+    <h1>Outlet stock</h1>
+    <p class="sub" id="last-count"></p>
+
+    <div class="stats" id="stats"></div>
+    <div id="readonly-note" class="notice hidden">You can view stock, but only admins can save changes.</div>
+
+    <div class="tabs" role="tablist" id="tabs"></div>
+
+    <section id="outlet-view">
+      <div class="toolbar">
+        <div class="chips" id="chips"></div>
+        <div class="toolbar-right">
+          <label class="toggle"><input type="checkbox" id="low-only"> Low only</label>
+          <button class="btn btn-primary" id="save-all" disabled>Save all</button>
+        </div>
+      </div>
+      <div id="items"></div>
+    </section>
+
+    <section id="order-view" class="hidden">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Order from suppliers</div>
+            <div class="panel-sub">Shortfall = reorder level − on hand, totalled across all outlets. Uses saved figures.</div>
+          </div>
+          <button class="btn btn-primary" id="copy-order">Copy list</button>
+        </div>
+        <div id="order-body"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+const SUPABASE_URL = 'https://dhvdpkpuugrwrktbtdvn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_QD_9O6mPRIYWgOmWDQIMtQ__2bTZv7H';
+const EMAIL_DOMAIN = 'meet-tracker.local'; // usernames map to <username>@meet-tracker.local
+const ORDER_TAB = '__order';
+const CATEGORY_ORDER = ['Coffee', 'Dairy', 'Powders & syrups', 'Bakery', 'Packaging', 'Other'];
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = id => document.getElementById(id);
+
+const state = {
+  rows: [],          // saved rows from stock_latest
+  drafts: {},        // key -> { qty, reorder } unsaved edits
+  outlets: [],
+  tab: null,
+  category: 'All',
+  lowOnly: false,
+  isAdmin: false,
+  saving: new Set(),
+};
+
+const key = r => `${r.outlet}|${r.sku}`;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const plural = (n, unit) => `${n} ${unit}${n === 1 ? '' : (unit.endsWith('x') ? 'es' : 's')}`;
+const isLow = (qty, reorder) => qty <= reorder;
+const catRank = c => { const i = CATEGORY_ORDER.indexOf(c); return i === -1 ? CATEGORY_ORDER.length : i; };
+
+function current(r) {
+  const d = state.drafts[key(r)];
+  return d ? d : { qty: r.qty_on_hand, reorder: r.reorder_level };
+}
+function isDirty(r) {
+  const d = state.drafts[key(r)];
+  return !!d && (d.qty !== r.qty_on_hand || d.reorder !== r.reorder_level);
+}
+
+function toast(msg, isErr = false) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', isErr);
+  t.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('show'), isErr ? 5000 : 2200);
+}
+
+/* ---------- Auth ---------- */
+
+async function boot() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) await enter(session); else showLogin();
+}
+
+function showLogin() {
+  $('app').classList.add('hidden');
+  $('auth').classList.remove('hidden');
+  $('login-form').classList.remove('hidden');
+  $('pw-form').classList.add('hidden');
+}
+
+async function enter(session) {
+  const { data: profile, error } = await db.from('profiles')
+    .select('username, is_admin, must_change_password').eq('id', session.user.id).maybeSingle();
+  if (error) { toast(error.message, true); return showLogin(); }
+  if (profile?.must_change_password) {
+    $('auth').classList.remove('hidden');
+    $('login-form').classList.add('hidden');
+    $('pw-form').classList.remove('hidden');
+    $('new-pw').focus();
+    return;
+  }
+  state.isAdmin = !!profile?.is_admin;
+  $('who-name').textContent = profile?.username || session.user.email;
+  $('who-role').textContent = state.isAdmin ? 'Admin' : 'View only';
+  $('readonly-note').classList.toggle('hidden', state.isAdmin);
+  $('auth').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  await load();
+}
+
+$('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('login-error').textContent = '';
+  const username = $('username').value.trim().toLowerCase();
+  const { data, error } = await db.auth.signInWithPassword({ email: `${username}@${EMAIL_DOMAIN}`, password: $('password').value });
+  if (error) { $('login-error').textContent = 'Wrong username or password.'; return; }
+  $('password').value = '';
+  await enter(data.session);
+});
+
+$('pw-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('pw-error').textContent = '';
+  const { error } = await db.auth.updateUser({ password: $('new-pw').value });
+  if (error) { $('pw-error').textContent = error.message; return; }
+  const { error: markErr } = await db.rpc('mark_password_changed');
+  if (markErr) { $('pw-error').textContent = markErr.message; return; }
+  $('new-pw').value = '';
+  const { data: { session } } = await db.auth.getSession();
+  await enter(session);
+});
+
+$('sign-out').addEventListener('click', async () => {
+  if (Object.keys(state.drafts).some(k => isDirty(state.rows.find(r => key(r) === k))) &&
+      !confirm('You have unsaved changes. Sign out anyway?')) return;
+  await db.auth.signOut();
+  state.drafts = {};
+  showLogin();
+});
+
+/* ---------- Data ---------- */
+
+async function load() {
+  const { data, error } = await db.from('stock_latest').select('*');
+  if (error) { toast(`Could not load stock: ${error.message}`, true); return; }
+  state.rows = data;
+  state.outlets = [...new Set(data.map(r => r.outlet))].sort();
+  if (!state.tab || (state.tab !== ORDER_TAB && !state.outlets.includes(state.tab))) state.tab = state.outlets[0] || ORDER_TAB;
+  render();
+}
+
+async function save(rows) {
+  rows = rows.filter(isDirty);
+  if (!rows.length || !state.isAdmin) return;
+  const date = today();
+  const payload = rows.map(r => {
+    const c = current(r);
+    return { outlet: r.outlet, sku: r.sku, qty_on_hand: c.qty, reorder_level: c.reorder, counted_at: date };
+  });
+  rows.forEach(r => state.saving.add(key(r)));
+  render();
+  // One row per outlet/item/day: saving twice on the same day overwrites today's figure, earlier days stay as history.
+  const { data, error } = await db.from('stock_counts')
+    .upsert(payload, { onConflict: 'outlet,sku,counted_at' })
+    .select('outlet, sku, qty_on_hand, reorder_level, counted_at');
+  rows.forEach(r => state.saving.delete(key(r)));
+  if (error || data.length !== payload.length) {
+    toast(error ? `Save failed: ${error.message}` : 'Save failed: you may not have permission to edit stock.', true);
+    render();
+    return;
+  }
+  for (const saved of data) {
+    const r = state.rows.find(x => x.outlet === saved.outlet && x.sku === saved.sku);
+    Object.assign(r, saved, { needs_reorder: isLow(saved.qty_on_hand, saved.reorder_level) });
+    delete state.drafts[key(r)];
+  }
+  toast(data.length === 1 ? `Saved ${rows[0].item_name}` : `Saved ${data.length} items`);
+  render();
+}
+
+/* ---------- Render ---------- */
+
+function render() {
+  renderStats();
+  renderTabs();
+  const onOrder = state.tab === ORDER_TAB;
+  $('outlet-view').classList.toggle('hidden', onOrder);
+  $('order-view').classList.toggle('hidden', !onOrder);
+  if (onOrder) renderOrder(); else renderOutlet();
+  const latest = state.rows.reduce((m, r) => r.counted_at > m ? r.counted_at : m, '');
+  $('last-count').textContent = latest ? `Latest count saved ${fmtDate(latest)}` : '';
+}
+
+function lowCount(outlet) {
+  return state.rows.filter(r => r.outlet === outlet && r.needs_reorder).length;
+}
+
+function orderLines() {
+  const bySku = new Map();
+  for (const r of state.rows) {
+    const short = r.reorder_level - r.qty_on_hand;
+    if (short <= 0) continue;
+    if (!bySku.has(r.sku)) bySku.set(r.sku, { sku: r.sku, name: r.item_name, unit: r.unit, category: r.category, total: 0, split: [] });
+    const line = bySku.get(r.sku);
+    line.total += short;
+    line.split.push({ outlet: r.outlet, qty: short });
+  }
+  return [...bySku.values()].sort((a, b) => catRank(a.category) - catRank(b.category) || a.name.localeCompare(b.name));
+}
+
+function renderStats() {
+  const lines = orderLines();
+  const cards = state.outlets.map(o => {
+    const n = lowCount(o);
+    return `<button class="stat" data-tab="${esc(o)}">
+      <div class="stat-label">${esc(o)}</div>
+      <div class="stat-value ${n ? 'has-low' : ''}">${n}</div>
+      <div class="stat-note">${n === 1 ? 'item' : 'items'} low</div>
+    </button>`;
+  });
+  cards.push(`<button class="stat" data-tab="${ORDER_TAB}">
+    <div class="stat-label">To order</div>
+    <div class="stat-value ${lines.length ? 'has-low' : ''}">${lines.length}</div>
+    <div class="stat-note">${lines.length === 1 ? 'item' : 'items'} short across outlets</div>
+  </button>`);
+  $('stats').innerHTML = cards.join('');
+}
+
+function renderTabs() {
+  const tabs = state.outlets.map(o => {
+    const n = lowCount(o);
+    return `<button class="tab" role="tab" data-tab="${esc(o)}" aria-selected="${state.tab === o}">
+      ${esc(o)} <span class="count ${n ? 'low' : ''}">${n} low</span></button>`;
+  });
+  tabs.push(`<button class="tab" role="tab" data-tab="${ORDER_TAB}" aria-selected="${state.tab === ORDER_TAB}">Order from suppliers</button>`);
+  $('tabs').innerHTML = tabs.join('');
+}
+
+function renderOutlet() {
+  const rows = state.rows.filter(r => r.outlet === state.tab);
+  const cats = [...new Set(rows.map(r => r.category))].sort((a, b) => catRank(a) - catRank(b));
+  if (state.category !== 'All' && !cats.includes(state.category)) state.category = 'All';
+
+  $('chips').innerHTML = ['All', ...cats].map(c =>
+    `<button class="chip" data-cat="${esc(c)}" aria-pressed="${state.category === c}">${esc(c)}</button>`).join('');
+
+  const dirtyHere = rows.filter(isDirty);
+  const saveAll = $('save-all');
+  saveAll.classList.toggle('hidden', !state.isAdmin);
+  saveAll.disabled = !dirtyHere.length || state.saving.size > 0;
+  saveAll.textContent = dirtyHere.length ? `Save all (${dirtyHere.length})` : 'Save all';
+
+  const visible = rows.filter(r =>
+    (state.category === 'All' || r.category === state.category) &&
+    (!state.lowOnly || isLow(current(r).qty, current(r).reorder)));
+
+  if (!visible.length) {
+    $('items').innerHTML = `<div class="panel empty">${state.lowOnly ? 'Nothing is low here. 🎉' : 'No items in this category.'}</div>`;
+    return;
+  }
+
+  const groups = cats.filter(c => visible.some(r => r.category === c));
+  $('items').innerHTML = groups.map(c => {
+    const items = visible.filter(r => r.category === c).sort((a, b) => a.item_name.localeCompare(b.item_name));
+    return `<div class="cat-title">${esc(c)}</div><div class="grid">${items.map(card).join('')}</div>`;
+  }).join('');
+}
+
+function card(r) {
+  const k = esc(key(r));
+  const c = current(r);
+  const low = isLow(c.qty, c.reorder);
+  const dirty = isDirty(r);
+  const busy = state.saving.has(key(r));
+  const ro = !state.isAdmin || busy ? 'disabled' : '';
+  const stepper = (field, value, label) => `
+    <div>
+      <div class="field-label">${label}</div>
+      <div class="stepper">
+        <button type="button" data-step="-1" data-field="${field}" data-key="${k}" aria-label="Decrease ${label.toLowerCase()}" ${ro || (value <= 0 ? 'disabled' : '')}>−</button>
+        <input type="number" inputmode="numeric" min="0" step="1" value="${value}" data-field="${field}" data-key="${k}" aria-label="${label}" ${ro}>
+        <button type="button" data-step="1" data-field="${field}" data-key="${k}" aria-label="Increase ${label.toLowerCase()}" ${ro}>+</button>
+      </div>
+    </div>`;
+  const foot = dirty
+    ? `<span class="foot-note">Unsaved changes</span>
+       <span class="foot-actions">
+         <button class="btn btn-ghost" data-reset="${k}" ${busy ? 'disabled' : ''}>Undo</button>
+         <button class="btn btn-primary" data-save="${k}" ${busy ? 'disabled' : ''}>${busy ? 'Saving…' : 'Save'}</button>
+       </span>`
+    : `<span class="foot-note">Counted ${fmtDate(r.counted_at)}</span>`;
+  return `<article class="card ${low ? 'is-low' : ''} ${dirty ? 'is-dirty' : ''}">
+    <div class="card-head">
+      <div><div class="item-name">${esc(r.item_name)}</div><div class="item-meta">${esc(r.sku)} · per ${esc(r.unit)}</div></div>
+      <span class="badge ${low ? 'badge-low' : 'badge-ok'}">${low ? 'Low' : 'OK'}</span>
+    </div>
+    <div class="fields">${stepper('qty', c.qty, 'On hand')}${stepper('reorder', c.reorder, 'Reorder at')}</div>
+    <div class="card-foot">${foot}</div>
+  </article>`;
+}
+
+function renderOrder() {
+  const lines = orderLines();
+  $('copy-order').disabled = !lines.length;
+  if (!lines.length) {
+    $('order-body').innerHTML = `<div class="empty">Every outlet is above its reorder levels. Nothing to order.</div>`;
+    return;
+  }
+  const pending = Object.keys(state.drafts).length && state.rows.some(isDirty);
+  $('order-body').innerHTML = (pending ? `<div class="notice" style="margin:16px 20px 0">Some edits aren't saved yet, so they aren't counted here.</div>` : '') +
+    `<table>
+      <thead><tr><th>Item</th><th class="hide-sm">By outlet</th><th class="num">Order</th></tr></thead>
+      <tbody>${lines.map(l => `<tr>
+        <td><div style="font-weight:600">${esc(l.name)}</div><div class="split">${esc(l.category)}</div>
+            <div class="split show-sm" style="margin-top:4px">${l.split.map(s => `${esc(s.outlet)} ${s.qty}`).join(' · ')}</div></td>
+        <td class="hide-sm split">${l.split.map(s => `${esc(s.outlet)} <strong style="color:var(--text)">${s.qty}</strong>`).join('<br>')}</td>
+        <td class="num"><span class="total">${l.total}</span><div class="split">${esc(plural(l.total, l.unit).replace(/^\d+ /, ''))}</div></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function orderText() {
+  const lines = orderLines();
+  const head = `Order from suppliers (${fmtDate(today())})`;
+  return [head, '', ...lines.map(l =>
+    `- ${l.name}: ${plural(l.total, l.unit)} (${l.split.map(s => `${s.outlet} ${s.qty}`).join(', ')})`)].join('\n');
+}
+
+/* ---------- Events ---------- */
+
+function setDraft(k, field, value) {
+  const r = state.rows.find(x => key(x) === k);
+  const c = { ...current(r) };
+  c[field] = Math.max(0, Math.floor(Number(value) || 0));
+  state.drafts[k] = c;
+  if (!isDirty(r)) delete state.drafts[k];
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  if (t.dataset.tab) { state.tab = t.dataset.tab; render(); return; }
+  if (t.dataset.cat) { state.category = t.dataset.cat; render(); return; }
+  if (t.dataset.step) {
+    const k = t.dataset.key, f = t.dataset.field;
+    const r = state.rows.find(x => key(x) === k);
+    setDraft(k, f, current(r)[f] + Number(t.dataset.step));
+    render();
+    return;
+  }
+  if (t.dataset.reset) { delete state.drafts[t.dataset.reset]; render(); return; }
+  if (t.dataset.save) { save([state.rows.find(x => key(x) === t.dataset.save)]); return; }
+});
+
+// Typed numbers: commit on change (blur / Enter) so typing isn't interrupted by re-renders.
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.matches('.stepper input')) { setDraft(t.dataset.key, t.dataset.field, t.value); render(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('.stepper input')) e.target.blur();
+});
+
+$('low-only').addEventListener('change', e => { state.lowOnly = e.target.checked; render(); });
+$('save-all').addEventListener('click', () => save(state.rows.filter(r => r.outlet === state.tab)));
+
+$('copy-order').addEventListener('click', async () => {
+  const text = orderText();
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = Object.assign(document.createElement('textarea'), { value: text });
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+  }
+  toast('Order list copied');
+});
+
+window.addEventListener('beforeunload', e => {
+  if (state.rows.some(isDirty)) { e.preventDefault(); e.returnValue = ''; }
+});
+
+boot();
+</script>
+</body>
+</html>
